@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Spring Boot</title>
+</head>
+
+<body>
+	<table id="customer-table" border="1">
+		<thead>
+			<tr>
+				<td>ID</td>
+				<td>First Name</td>
+				<td>Last Name</td>
+				<td></td>
+				<td></td>
+			</tr>
+		</thead>
+		<tbody id="customer-tbody">
+		</tbody>
+	</table>
+	<hr />
+	<button type="button" id="switch-create-customer-btn" disabled>Create Customer</button>
+	<form id="customer-form">
+		<h1 id="form-header">Create Customer</h1 id="form-header">
+		<input type="hidden" value="create" name="form-action" />
+		<input type="hidden" value="" name="cid" />
+		<fieldset>
+			<legend>Customer Form:</legend>
+			<label for="fname">First name:</label>
+			<input type="text" id="fname" name="fname"><br><br>
+			<label for="lname">Last name:</label>
+			<input type="text" id="lname" name="lname"><br><br>
+			<input type="submit" value="Submit">
+		</fieldset>
+	</form>
+
+	<template id="customer-row-template">
+		<tr>
+			<td class="customer-id"></td>
+			<td class="customer-first-name"></td>
+			<td class="customer-last-name"></td>
+			<td><button type="button" class="customer-edit-btn" data-id="">Edit</button></td>
+			<td><button type="button" class="customer-delete-btn" data-id="">Delete</button></td>
+		</tr>
+	</template>
+
+	<script>
+		const customerForm = document.getElementById("customer-form");
+		const formAction = customerForm.querySelector("[name=form-action]");
+		const fname = document.getElementById("fname");
+		const lname = document.getElementById("lname");
+		const cid = document.querySelector("[name=cid]");
+		const formHeader = document.getElementById("form-header");
+		const switchCreateCustomerBtn = document.getElementById("switch-create-customer-btn");
+
+		switchCreateCustomerBtn.addEventListener("click", (e) => {
+			resetCreateCustomerForm();
+		});
+
+		customerForm.addEventListener("submit", (e) => {
+			e.preventDefault();
+			const formActionValue = formAction.value;
+			if (formActionValue === "create") {
+				handleFormCreateCustomer();
+			} else if (formActionValue === "update") {
+				handleFormUpdateCustomer();
+			} else {
+				alert("unknown form action");
+			}
+		});
+
+		function disableButtons() {
+			const buttons = document.querySelectorAll("[type=submit], [type=button]");
+			for (btn of buttons) {
+				btn.disabled = true;
+			}
+		}
+
+		function resetCreateCustomerForm() {
+			formHeader.textContent = "Create Customer";
+			formAction.value = "create";
+			switchCreateCustomerBtn.disabled = true;
+			cid.value = "";
+			customerForm.reset();
+		}
+
+		function enableButtons() {
+			const buttons = document.querySelectorAll("[type=submit], [type=button]");
+			for (btn of buttons) {
+				btn.disabled = false;
+			}
+		}
+
+		async function handleFormCreateCustomer() {
+			const fnameValue = fname.value;
+			const lnameValue = lname.value;
+			if (!fnameValue || !lnameValue) {
+				alert("First Name / Last Name can not be null");
+				return;
+			}
+			disableButtons();
+			const customer = await createCustomer(fnameValue, lnameValue);
+			enableButtons();
+			if (customer) {
+				const {id, firstName, lastName} = customer;
+				appendRow(id, firstName, lastName);
+				resetCreateCustomerForm();
+			}
+
+		}
+
+		async function handleFormUpdateCustomer() {
+			const fnameValue = fname.value;
+			const lnameValue = lname.value;
+			const cidValue = cid.value;
+			if (!fnameValue || !lnameValue) {
+				alert("First Name / Last Name can not be null");
+				return;
+			}
+			disableButtons();
+			const customer = await updateCustomer(cidValue, fnameValue, lnameValue);
+			enableButtons();
+			if (customer) {
+				const {id, firstName, lastName} = customer;
+				const tableRow = document.querySelector(`tr[data-id=customer-${id}]`);
+				tableRow.querySelector(".customer-first-name").textContent = firstName;
+				tableRow.querySelector(".customer-last-name").textContent = lastName;
+				resetCreateCustomerForm();
+			}
+
+		}
+
+		async function getAllCustomers() {
+			const response = await fetch('/api/customers');
+			const data = await response.json();
+			const tbody = document.getElementById("customer-tbody");
+			tbody.innerHTML = "";
+			for (row of data) {
+				appendRow(row.id, row.firstName, row.lastName);
+			}
+		}
+
+		function appendRow(id, firstName, lastName) {
+			const tbody = document.getElementById("customer-tbody");
+			const template = document.getElementById("customer-row-template");
+			const tr = template.content.cloneNode(true).querySelector("tr");
+			tr.querySelector(".customer-id").textContent = id;
+			tr.querySelector(".customer-first-name").textContent = firstName;
+			tr.querySelector(".customer-last-name").textContent = lastName;
+			const deleteBtn = tr.querySelector(".customer-delete-btn");
+			tr.setAttribute("data-id", "customer-" + id);
+			deleteBtn.setAttribute("data-id", id);
+			deleteBtn.addEventListener("click", async (e) => {
+				const customerId = deleteBtn.getAttribute("data-id");
+				disableButtons();
+				await deleteCustomer(customerId);
+				enableButtons();
+				tr.parentNode.removeChild(tr)
+				resetCreateCustomerForm();
+			});
+
+
+			const editBtn = tr.querySelector(".customer-edit-btn");
+			editBtn.setAttribute("data-id", id);
+			editBtn.addEventListener("click", async (e) => {
+				const customerId = editBtn.getAttribute("data-id");
+				disableButtons();
+				const customer = await getCustomer(customerId);
+				enableButtons();
+				const {id, firstName, lastName} = customer;
+				formHeader.innerText = `Update Customer ID: ${id}`;
+				formAction.value = "update";
+				fname.value = firstName;
+				lname.value = lastName;
+				cid.value = id;
+			});
+
+			tbody.append(tr);
+		}
+
+		async function createCustomer(firstName, lastName) {
+			try {
+
+				const response = await fetch("/api/customers", {
+					method: "POST",
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						firstName,
+						lastName,
+					})
+				});
+				const data = await response.json();
+				return data;
+			} catch (error) {
+				console.error(error);
+			}
+		}
+
+		async function deleteCustomer(id) {
+			try {
+				const response = await fetch(`/api/customers/${id}`, {
+					method: "DELETE"
+				});
+			} catch (error) {
+				console.error(error);
+			}
+		}
+
+		async function updateCustomer(id, firstName, lastName) {
+			try {
+				const response = await fetch(`/api/customers/${id}`, {
+					method: "PUT",
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						firstName,
+						lastName,
+					})
+				});
+				const data = await response.json();
+				return data;
+			} catch (error) {
+				console.error(error);
+			}
+		}
+
+		async function getCustomer(id) {
+			try {
+				const response = await fetch(`/api/customers/${id}`, {
+					method: "GET"
+				});
+				const data = await response.json();
+				return data;
+			} catch (error) {
+				console.error(error);
+			}
+		}
+		getAllCustomers();
+	</script>
+</body>
+
+</html>
