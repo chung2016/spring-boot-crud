@@ -6,6 +6,8 @@
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Spring Boot</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.0/sockjs.min.js" integrity="sha512-ksHM9XpigYGeRdXZfI4GddPsUjmLj6zd1MCNXL4fsfDwp1G+u6hC73uwDjlpjdX4tbEtj/N1AWkLo6WjDwQkyA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js" integrity="sha512-iKDtgDyTHjAitUDdLljGhenhPwrbBfqTKWO1mkhSFH3A7blITC9MhYon6SjnMhp4o0rADGw9yAC6EW4t5a4K3g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 
 <body>
@@ -47,6 +49,11 @@
 			<td><button type="button" class="customer-delete-btn" data-id="">Delete</button></td>
 		</tr>
 	</template>
+
+	<input type="text" id="socket-name" placeholder="name">
+	<button id="socket-send-name-btn">send</button>
+	<button id="socket-connect-btn">connect</button>
+	<button id="socket-disconnect-btn">disconnect</button>
 
 	<script>
 		const customerForm = document.getElementById("customer-form");
@@ -243,6 +250,54 @@
 			}
 		}
 		getAllCustomers();
+	</script>
+
+	<script>
+		let stompClient;
+		const socketConnectBtn = document.getElementById("socket-connect-btn");
+
+		socketConnectBtn.addEventListener("click", () => {
+			connect();
+		});
+
+		const socketDisconnectBtn = document.getElementById("socket-disconnect-btn");
+
+		socketDisconnectBtn.addEventListener("click", () => {
+			disconnect();
+		});
+
+		const socketSendNameBtn = document.getElementById("socket-send-name-btn");
+
+		socketSendNameBtn.addEventListener("click", () => {
+			sendName();
+		});
+
+		function connect() {
+			const socket = new SockJS('/gs-guide-websocket');
+			stompClient = Stomp.over(socket);
+			stompClient.debug = null;
+			stompClient.connect({}, function (frame) {
+				console.log('Connected: ' + frame);
+				stompClient.subscribe('/topic/greetings', function (greeting) {
+					console.log(JSON.parse(greeting.body).content);
+				});
+			});
+		}
+
+		function sendName() {
+			if (stompClient !== null) {
+				const socketName = document.getElementById("socket-name");
+				stompClient.send("/app/hello", {}, JSON.stringify({'name': socketName.value }));
+			}
+		}
+
+		function disconnect() {
+			if (stompClient !== null) {
+				stompClient.disconnect();
+				stompClient = null;
+				console.log("Disconnected");
+			}
+		}
 	</script>
 </body>
 
